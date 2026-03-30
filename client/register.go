@@ -1,0 +1,40 @@
+package client
+
+import (
+	"context"
+	"log/slog"
+	"os"
+
+	grpcd "git.sonicoriginal.software/grpcd-protos"
+
+	"git.sonicoriginal.software/grpc-foundation/client"
+)
+
+func (c *Client) register(ctx context.Context) {
+	grpcdAddress := os.Getenv(GRPCDAddressKey)
+	if grpcdAddress == "" {
+		c.log.InfoContext(ctx, "grpcd address not set - not registering")
+		return
+	}
+
+	ctx, span := c.tracer.Start(ctx, "register")
+	defer span.End()
+
+	conn, err := client.New(grpcdAddress, c.log, nil, nil)
+	if err != nil {
+		c.log.ErrorContext(ctx, "Failed to create client",
+			"error", err, slog.String("address", grpcdAddress))
+		return
+	}
+	defer conn.Close()
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	client := grpcd.NewGRPCDServiceClient(conn)
+	_, err = client.Register(ctx, &grpcd.RegisterRequest{Methods: c.methods})
+	if err != nil {
+		c.log.ErrorContext(ctx, "Failed to register",
+			"error", err, slog.String("address", grpcdAddress))
+	}
+}
