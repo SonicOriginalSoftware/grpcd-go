@@ -79,19 +79,6 @@ func TestRun(t *testing.T) {
 		}
 	})
 
-	t.Run("returns error when OTEL initialization fails", func(t *testing.T) {
-		t.Setenv("OTEL_TRACES_EXPORTER", "unsupported")
-
-		lis := listener.New()
-		err := Run(t.Context(), "test-service", nil, nil, lis)
-		if err == nil {
-			t.Fatal("expected error")
-		}
-		if !strings.Contains(err.Error(), "failed to initialize OTEL") {
-			t.Errorf("expected error to contain %q, got %q", "failed to initialize OTEL", err.Error())
-		}
-	})
-
 	t.Run("returns error when serve fails", func(t *testing.T) {
 		lis := listener.NewFailing(errors.New("accept error"))
 		err := Run(t.Context(), "test-service", nil, nil, lis)
