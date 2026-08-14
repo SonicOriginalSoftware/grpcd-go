@@ -20,7 +20,7 @@ func (c *Client) register(ctx context.Context) {
 	ctx, span := c.tracer.Start(ctx, "register")
 	defer span.End()
 
-	conn, err := client.New(grpcdAddress, c.log, nil, nil)
+	conn, err := client.New(grpcdAddress, nil, nil, nil)
 	if err != nil {
 		c.log.ErrorContext(ctx, "Failed to create client",
 			"error", err, slog.String("address", grpcdAddress))
