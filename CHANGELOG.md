@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.1.1 - 2026-08-14
+#### Bug Fixes
+- align with updated grpc-foundation - (9252e37) - Nathan Blair
+#### Miscellaneous Chores
+- go mod tidy the example mod - (fca1b2f) - Nathan Blair
+
+- - -
+
 ## 0.1.0 - 2026-03-30
 #### Features
 - initial re-release - (bdfe369) - Nathan Blair
