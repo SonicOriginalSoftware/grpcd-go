@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.4.0 - 2026-08-29
+#### Features
+- register the info server as well - (8b3d5cd) - Nathan Blair
+
+- - -
+
 ## 0.3.0 - 2026-08-29
 #### Features
 - register takes created health service and registers it - (5483687) - Nathan Blair
