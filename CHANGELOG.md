@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.6.1 - 2026-08-29
+#### Bug Fixes
+- bound deregistration - (22752bc) - Nathan Blair
+
+- - -
+
 ## 0.6.0 - 2026-08-29
 #### Features
 - update foundation - (e864f7e) - Nathan Blair
