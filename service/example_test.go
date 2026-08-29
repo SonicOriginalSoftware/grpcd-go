@@ -3,6 +3,7 @@ package service_test
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -43,10 +44,12 @@ func Example() {
 		return
 	}
 
-	srv := foundation.New(log)
-
 	log = log.With(slog.String("address", lis.Addr().String()))
 	ctx = logger.ContextWithLogger(ctx, log)
+
+	// New installs an interceptor that puts this logger into every request
+	// context, so it has to be built after the logger is complete.
+	srv := foundation.New(log)
 
 	// Checks for the upstream services this one depends on. A grpcd check is
 	// added for you when GRPCD_ADDRESS is set, and "grpcd" is reserved either
@@ -63,12 +66,19 @@ func Example() {
 	}
 
 	grpcdClient := grpcdclient.New(log, methodList)
-	go grpcdClient.Run(ctx)
 
-	go foundation.HandleGracefulShutdown(ctx, cancel, log, srv, 5*time.Second)
+	var wg sync.WaitGroup
+
+	wg.Go(func() { grpcdClient.Run(ctx) })
+	wg.Go(func() { foundation.HandleGracefulShutdown(ctx, cancel, log, srv, 5*time.Second) })
 
 	log.Info("gRPC server listening")
 	if err := srv.Serve(lis); err != nil {
 		log.Error("Failed to serve", slog.Any("error", err))
 	}
+
+	// Serve returns once the shutdown handler has stopped the server. The grpcd
+	// client deregisters on its way out, so the process has to stay up until it
+	// has finished.
+	wg.Wait()
 }

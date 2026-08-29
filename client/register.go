@@ -22,7 +22,7 @@ func (c *Client) register(ctx context.Context) {
 	conn, err := client.New(grpcdAddress, nil, nil)
 	if err != nil {
 		c.log.ErrorContext(ctx, "Failed to create client",
-			"error", err, slog.String("address", grpcdAddress))
+			"error", err, slog.String("grpcd_address", grpcdAddress))
 		return
 	}
 	defer conn.Close()
@@ -31,6 +31,6 @@ func (c *Client) register(ctx context.Context) {
 	_, err = client.Register(ctx, &grpcd.RegisterRequest{Methods: c.methods})
 	if err != nil {
 		c.log.ErrorContext(ctx, "Failed to register",
-			"error", err, slog.String("address", grpcdAddress))
+			"error", err, slog.String("grpcd_address", grpcdAddress))
 	}
 }

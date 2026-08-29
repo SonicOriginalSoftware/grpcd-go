@@ -41,72 +41,9 @@ It assembles only. The listener, the server, the background goroutines, and the
 blocking `Serve` call are yours, because those are the pieces that differ
 between production and a test.
 
-```go
-package main
-
-import (
-    "context"
-    "log/slog"
-    "time"
-
-    "google.golang.org/grpc"
-    "google.golang.org/grpc/health"
-
-    "git.sonicoriginal.software/logger"
-
-    foundation "git.sonicoriginal.software/grpc-foundation/server"
-
-    grpcdclient "git.sonicoriginal.software/grpcd-go/client"
-    "git.sonicoriginal.software/grpcd-go/diagnostics"
-    "git.sonicoriginal.software/grpcd-go/service"
-)
-
-func main() {
-    ctx, cancel := context.WithCancel(context.Background())
-    defer cancel()
-
-    log := slog.Default()
-
-    lis, err := foundation.Listen()
-    if err != nil {
-        log.Error("Failed to create listener", slog.Any("error", err))
-
-        return
-    }
-
-    srv := foundation.New(log)
-
-    log = log.With(slog.String("address", lis.Addr().String()))
-    ctx = logger.ContextWithLogger(ctx, log)
-
-    // Checks for the upstream services this one depends on. A grpcd check is
-    // added for you when GRPCD_ADDRESS is set, and "grpcd" is reserved either
-    // way.
-    checks := diagnostics.Checks{}
-
-    // You keep this handle. Register marks your services SERVING; flipping one
-    // to NOT_SERVING later, or draining with Shutdown, is yours to do.
-    healthSrv := health.NewServer()
-
-    methodList, err := service.Register(srv, healthSrv, checks, func(s grpc.ServiceRegistrar) {
-        yourpb.RegisterYourServiceServer(s, &yourServer{})
-    })
-    if err != nil {
-        log.Error("Failed to register services", slog.Any("error", err))
-
-        return
-    }
-
-    grpcdClient := grpcdclient.New(log, methodList)
-    go grpcdClient.Run(ctx)
-
-    go foundation.HandleGracefulShutdown(ctx, cancel, log, srv, 5*time.Second)
-
-    if err := srv.Serve(lis); err != nil {
-        log.Error("Failed to serve", slog.Any("error", err))
-    }
-}
-```
+`service/example_test.go` holds the whole sequence as a Go `Example`. It has no
+`// Output:` comment, so `go test` compiles it and never runs it, which keeps it
+type-checked against the real API. Read it there rather than from a copy here.
 
 The returned method list excludes the `grpc.`, `info.`, and `diagnostics.`
 services, which are infrastructure rather than something callers discover.
@@ -195,17 +132,5 @@ Examples:
 - `auth.AuthService.Login`
 - `api.v1.UserService.GetUser`
 
-`service.Methods` derives these names from what is registered on your server, so
-you do not maintain the list by hand.
-
-## Reference Implementation
-
-`service/example_test.go` holds the wiring above as a Go `Example`. It has no
-`// Output:` comment, so `go test` compiles it and never runs it — its job is to
-keep the documented sequence type-checked against the real API.
-
-Read it with:
-
-```bash
-go doc git.sonicoriginal.software/grpcd-go/service
-```
+`service.Register` derives these names from what is registered on your server,
+so you do not maintain the list by hand.
