@@ -92,7 +92,7 @@ func main() {
         "yourpackage.YourService.AnotherMethod",
     }
 
-    grpcdClient := client.New(log, methods)
+    grpcdClient := client.New(log, "yourservice", methods)
 
     // Start background registration loop
     ctx := context.Background()

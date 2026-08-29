@@ -40,7 +40,7 @@ func (c *Client) deregister(ctx context.Context) {
 	defer conn.Close()
 
 	client := grpcd.NewGRPCDServiceClient(conn)
-	_, err = client.Deregister(ctx, &grpcd.DeregisterRequest{})
+	_, err = client.Deregister(ctx, &grpcd.DeregisterRequest{ServerName: c.serverName})
 	if err != nil {
 		c.log.ErrorContext(ctx, "Failed to deregister",
 			"error", err, slog.String("grpcd_address", grpcdAddress))

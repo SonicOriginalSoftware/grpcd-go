@@ -37,6 +37,9 @@ func Example() {
 
 	log := slog.Default()
 
+	// The same name the otel resource and the grpcd registration are keyed by.
+	serverName := foundation.Name("example")
+
 	lis, err := foundation.Listen()
 	if err != nil {
 		log.Error("Failed to create listener", slog.Any("error", err))
@@ -65,7 +68,7 @@ func Example() {
 		return
 	}
 
-	grpcdClient := grpcdclient.New(log, methodList)
+	grpcdClient := grpcdclient.New(log, serverName, methodList)
 
 	var wg sync.WaitGroup
 

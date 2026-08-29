@@ -12,9 +12,10 @@ import (
 
 // Client provides service grpcd functionality
 type Client struct {
-	tracer  trace.Tracer
-	log     *slog.Logger
-	methods []string
+	tracer     trace.Tracer
+	log        *slog.Logger
+	serverName string
+	methods    []string
 }
 
 const (
@@ -24,11 +25,18 @@ const (
 	GRPCDAddressKey = "GRPCD_ADDRESS"
 )
 
-// New returns a new grpcd client
-func New(log *slog.Logger, methods []string) *Client {
+// New returns a new grpcd client. The server name is what grpcd reports the
+// registration under, and is the same name the server identifies itself by
+// everywhere else.
+func New(log *slog.Logger, serverName string, methods []string) *Client {
 	if log == nil {
 		log = logger.NewNullLogger()
 	}
 	log = log.With(slog.String("component", component))
-	return &Client{log: log, tracer: otel.Tracer(component), methods: methods}
+	return &Client{
+		log:        log,
+		tracer:     otel.Tracer(component),
+		serverName: serverName,
+		methods:    methods,
+	}
 }

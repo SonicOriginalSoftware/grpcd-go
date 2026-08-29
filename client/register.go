@@ -28,7 +28,10 @@ func (c *Client) register(ctx context.Context) {
 	defer conn.Close()
 
 	client := grpcd.NewGRPCDServiceClient(conn)
-	_, err = client.Register(ctx, &grpcd.RegisterRequest{Methods: c.methods})
+	_, err = client.Register(ctx, &grpcd.RegisterRequest{
+		ServerName: c.serverName,
+		Methods:    c.methods,
+	})
 	if err != nil {
 		c.log.ErrorContext(ctx, "Failed to register",
 			"error", err, slog.String("grpcd_address", grpcdAddress))
