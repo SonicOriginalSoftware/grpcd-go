@@ -23,12 +23,13 @@ import (
 const grpcdCheckName = "grpcd"
 
 // Register attaches the caller's services to srv, along with the diagnostics,
-// health, and reflection services every service exposes. It marks each of the
-// caller's services SERVING and returns their fully qualified method names,
-// which is what grpcd advertises.
+// info, health, and reflection services every service exposes. It marks each
+// of the caller's services SERVING and returns their fully qualified method
+// names, which is what grpcd advertises.
 //
-// A check for the grpcd dependency is added to checks, so that name is
-// reserved and a caller supplying it is an error.
+// When GRPCD_ADDRESS is set, a check for the grpcd dependency is added to
+// checks. The name is reserved either way, so a caller supplying it is an
+// error regardless of how the server is configured.
 //
 // Register only assembles. Serving, shutdown, grpcd registration, and any
 // later health status change are the caller's to make.
@@ -52,8 +53,13 @@ func Register(
 		return nil, fmt.Errorf("duplicate diagnostic name %q", grpcdCheckName)
 	}
 
+	// A server with no grpcd address has no grpcd dependency to report on, so
+	// reporting one would show a permanent TRANSIENT_FAILURE against an empty
+	// target. The poller treats an unset address the same way.
 	grpcdAddress := os.Getenv(grpcdclient.GRPCDAddressKey)
-	checks[grpcdCheckName] = diagnostics.NewTargetCheck(grpcdAddress)
+	if grpcdAddress != "" {
+		checks[grpcdCheckName] = diagnostics.NewTargetCheck(grpcdAddress)
+	}
 
 	if registerFn != nil {
 		registerFn(srv)

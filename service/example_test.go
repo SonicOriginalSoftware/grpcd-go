@@ -48,8 +48,9 @@ func Example() {
 	log = log.With(slog.String("address", lis.Addr().String()))
 	ctx = logger.ContextWithLogger(ctx, log)
 
-	// Checks for the upstream services this one depends on. The grpcd check is
-	// added for you, so "grpcd" is reserved.
+	// Checks for the upstream services this one depends on. A grpcd check is
+	// added for you when GRPCD_ADDRESS is set, and "grpcd" is reserved either
+	// way.
 	checks := diagnostics.Checks{}
 
 	healthSrv := health.NewServer()

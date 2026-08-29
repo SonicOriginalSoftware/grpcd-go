@@ -10,6 +10,7 @@ import (
 
 	diagpb "git.sonicoriginal.software/grpc-protos/diagnostics"
 
+	grpcdclient "git.sonicoriginal.software/grpcd-go/client"
 	"git.sonicoriginal.software/grpcd-go/diagnostics"
 )
 
@@ -83,7 +84,8 @@ func TestRegister(t *testing.T) {
 		}
 	})
 
-	t.Run("adds the grpcd check to the caller's checks", func(t *testing.T) {
+	t.Run("adds the grpcd check when an address is configured", func(t *testing.T) {
+		t.Setenv(grpcdclient.GRPCDAddressKey, "grpcd:50051")
 		checks := diagnostics.Checks{}
 
 		if _, err := Register(newServerStub(), newHealthStub(), checks, nil); err != nil {
@@ -91,6 +93,18 @@ func TestRegister(t *testing.T) {
 		}
 		if _, exists := checks[grpcdCheckName]; !exists {
 			t.Errorf("checks = %v, want a %q entry", checks, grpcdCheckName)
+		}
+	})
+
+	t.Run("adds no grpcd check when no address is configured", func(t *testing.T) {
+		t.Setenv(grpcdclient.GRPCDAddressKey, "")
+		checks := diagnostics.Checks{}
+
+		if _, err := Register(newServerStub(), newHealthStub(), checks, nil); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(checks) != 0 {
+			t.Errorf("checks = %v, want none", checks)
 		}
 	})
 
