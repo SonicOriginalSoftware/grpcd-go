@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.5.0 - 2026-08-29
+#### Features
+- don't add transient failure noise if grpcd address isn't given - (6c3950e) - Nathan Blair
+
+- - -
+
 ## 0.4.0 - 2026-08-29
 #### Features
 - register the info server as well - (8b3d5cd) - Nathan Blair
