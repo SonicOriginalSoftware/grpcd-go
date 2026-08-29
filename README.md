@@ -31,8 +31,11 @@ go get git.sonicoriginal.software/grpcd-go
 ### Service Assembly
 
 The `service` package attaches the endpoints every service exposes — health,
-reflection, and diagnostics — alongside your own, and reports which methods
-should be advertised to grpcd.
+reflection, diagnostics, and info — alongside your own, and reports which
+methods should be advertised to grpcd.
+
+The info service answers with the server's version, read from
+`GRPC_SERVER_VERSION`, so services no longer implement it themselves.
 
 It assembles only. The listener, the server, the background goroutines, and the
 blocking `Serve` call are yours, because those are the pieces that differ

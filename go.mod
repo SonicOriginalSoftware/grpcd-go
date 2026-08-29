@@ -3,7 +3,7 @@ module git.sonicoriginal.software/grpcd-go
 go 1.26.6
 
 require (
-	git.sonicoriginal.software/grpc-foundation v0.7.0
+	git.sonicoriginal.software/grpc-foundation v0.8.0
 	git.sonicoriginal.software/grpc-testing v0.2.0
 	git.sonicoriginal.software/grpcd-protos v0.1.0
 	git.sonicoriginal.software/logger v0.1.0
@@ -13,7 +13,7 @@ require (
 )
 
 require (
-	git.sonicoriginal.software/grpc-protos v0.1.0
+	git.sonicoriginal.software/grpc-protos v0.2.0
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect

@@ -63,7 +63,7 @@ func TestRegister(t *testing.T) {
 		}
 	})
 
-	t.Run("registers diagnostics, health, and reflection", func(t *testing.T) {
+	t.Run("registers diagnostics, info, health, and reflection", func(t *testing.T) {
 		srv := newServerStub()
 
 		if _, err := Register(srv, newHealthStub(), nil, nil); err != nil {
@@ -72,6 +72,7 @@ func TestRegister(t *testing.T) {
 
 		want := []string{
 			"diagnostics.DiagnosticsService",
+			"info.InfoService",
 			"grpc.health.v1.Health",
 			"grpc.reflection.v1.ServerReflection",
 		}

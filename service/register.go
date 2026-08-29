@@ -11,7 +11,9 @@ import (
 	"google.golang.org/grpc/reflection"
 
 	"git.sonicoriginal.software/grpc-foundation/methods"
+	foundation "git.sonicoriginal.software/grpc-foundation/server"
 	diagpb "git.sonicoriginal.software/grpc-protos/diagnostics"
+	infopb "git.sonicoriginal.software/grpc-protos/info"
 
 	grpcdclient "git.sonicoriginal.software/grpcd-go/client"
 	"git.sonicoriginal.software/grpcd-go/diagnostics"
@@ -58,6 +60,7 @@ func Register(
 	}
 
 	diagpb.RegisterDiagnosticsServiceServer(srv, diagnostics.NewServer(checks))
+	infopb.RegisterInfoServiceServer(srv, &infoServer{version: foundation.Version()})
 	grpc_health_v1.RegisterHealthServer(srv, healthSrv)
 	reflection.Register(srv)
 
