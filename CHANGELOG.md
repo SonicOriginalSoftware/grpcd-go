@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.3.0 - 2026-08-29
+#### Features
+- register takes created health service and registers it - (5483687) - Nathan Blair
+
+- - -
+
 ## 0.2.0 - 2026-08-29
 #### Features
 - refactor service.Run into more testable components - (3cbad27) - Nathan Blair
