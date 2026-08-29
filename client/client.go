@@ -3,7 +3,6 @@ package client
 
 import (
 	"log/slog"
-	"sync"
 
 	"git.sonicoriginal.software/logger"
 
@@ -13,8 +12,6 @@ import (
 
 // Client provides service grpcd functionality
 type Client struct {
-	mu sync.RWMutex
-
 	tracer  trace.Tracer
 	log     *slog.Logger
 	methods []string

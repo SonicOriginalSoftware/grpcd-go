@@ -5,9 +5,8 @@ import (
 	"log/slog"
 	"os"
 
-	grpcd "git.sonicoriginal.software/grpcd-protos"
-
 	"git.sonicoriginal.software/grpc-foundation/client"
+	grpcd "git.sonicoriginal.software/grpcd-protos"
 )
 
 func (c *Client) register(ctx context.Context) {
@@ -20,16 +19,13 @@ func (c *Client) register(ctx context.Context) {
 	ctx, span := c.tracer.Start(ctx, "register")
 	defer span.End()
 
-	conn, err := client.New(grpcdAddress, nil, nil, nil)
+	conn, err := client.New(grpcdAddress, nil, nil)
 	if err != nil {
 		c.log.ErrorContext(ctx, "Failed to create client",
 			"error", err, slog.String("address", grpcdAddress))
 		return
 	}
 	defer conn.Close()
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
 
 	client := grpcd.NewGRPCDServiceClient(conn)
 	_, err = client.Register(ctx, &grpcd.RegisterRequest{Methods: c.methods})
