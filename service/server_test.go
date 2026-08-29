@@ -2,6 +2,7 @@ package service
 
 import (
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
 // serverStub records what was registered on it and reports it back the way a
@@ -51,13 +52,34 @@ func methodInfo(desc *grpc.ServiceDesc) []grpc.MethodInfo {
 	return info
 }
 
-// registerExampleService stands in for a caller's registerFn.
+// registerExampleService stands in for a caller's registerFn. It registers two
+// methods so that deriving service names from them has a duplicate to collapse.
 func registerExampleService(s grpc.ServiceRegistrar) {
 	s.RegisterService(&grpc.ServiceDesc{
 		ServiceName: "example.ExampleService",
 		HandlerType: (*any)(nil),
 		Methods: []grpc.MethodDesc{
 			{MethodName: "Create"},
+			{MethodName: "Delete"},
 		},
 	}, struct{}{})
+}
+
+// healthStub records the serving statuses Register set.
+type healthStub struct {
+	grpc_health_v1.UnimplementedHealthServer
+
+	statuses map[string]grpc_health_v1.HealthCheckResponse_ServingStatus
+}
+
+func newHealthStub() *healthStub {
+	return &healthStub{
+		statuses: map[string]grpc_health_v1.HealthCheckResponse_ServingStatus{},
+	}
+}
+
+func (h *healthStub) SetServingStatus(
+	service string, status grpc_health_v1.HealthCheckResponse_ServingStatus,
+) {
+	h.statuses[service] = status
 }

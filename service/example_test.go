@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
 
 	"git.sonicoriginal.software/logger"
 
@@ -33,7 +34,6 @@ func Example() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	serviceName := "example-service"
 	log := slog.Default()
 
 	lis, err := foundation.Listen()
@@ -48,14 +48,20 @@ func Example() {
 	log = log.With(slog.String("address", lis.Addr().String()))
 	ctx = logger.ContextWithLogger(ctx, log)
 
+	// Checks for the upstream services this one depends on. The grpcd check is
+	// added for you, so "grpcd" is reserved.
 	checks := diagnostics.Checks{}
-	if err := service.Register(srv, serviceName, checks, registerExampleService); err != nil {
+
+	healthSrv := health.NewServer()
+
+	methodList, err := service.Register(srv, healthSrv, checks, registerExampleService)
+	if err != nil {
 		log.Error("Failed to register services", slog.Any("error", err))
 
 		return
 	}
 
-	grpcdClient := grpcdclient.New(log, service.Methods(srv))
+	grpcdClient := grpcdclient.New(log, methodList)
 	go grpcdClient.Run(ctx)
 
 	go foundation.HandleGracefulShutdown(ctx, cancel, log, srv, 5*time.Second)

@@ -47,6 +47,7 @@ import (
     "time"
 
     "google.golang.org/grpc"
+    "google.golang.org/grpc/health"
 
     "git.sonicoriginal.software/logger"
 
@@ -61,7 +62,6 @@ func main() {
     ctx, cancel := context.WithCancel(context.Background())
     defer cancel()
 
-    serviceName := "my-service"
     log := slog.Default()
 
     lis, err := foundation.Listen()
@@ -80,7 +80,11 @@ func main() {
     // added for you, so "grpcd" is reserved.
     checks := diagnostics.Checks{}
 
-    err = service.Register(srv, serviceName, checks, func(s grpc.ServiceRegistrar) {
+    // You keep this handle. Register marks your services SERVING; flipping one
+    // to NOT_SERVING later, or draining with Shutdown, is yours to do.
+    healthSrv := health.NewServer()
+
+    methodList, err := service.Register(srv, healthSrv, checks, func(s grpc.ServiceRegistrar) {
         yourpb.RegisterYourServiceServer(s, &yourServer{})
     })
     if err != nil {
@@ -89,7 +93,7 @@ func main() {
         return
     }
 
-    grpcdClient := grpcdclient.New(log, service.Methods(srv))
+    grpcdClient := grpcdclient.New(log, methodList)
     go grpcdClient.Run(ctx)
 
     go foundation.HandleGracefulShutdown(ctx, cancel, log, srv, 5*time.Second)
@@ -100,10 +104,29 @@ func main() {
 }
 ```
 
-`service.Methods` reports what is registered at the moment it is called, so it
-goes after `service.Register`. It excludes the `grpc.`, `info.`, and
-`diagnostics.` services, which are infrastructure rather than something callers
-discover.
+The returned method list excludes the `grpc.`, `info.`, and `diagnostics.`
+services, which are infrastructure rather than something callers discover.
+
+## Health Status
+
+`health.NewServer()` marks the `""` entry SERVING, which answers "is this
+process alive". `Register` adds an entry per service you registered, under its
+fully qualified gRPC name, so a probe asks about `yourpackage.YourService`
+rather than a logical name of your choosing.
+
+Those entries start SERVING and stay there until you change them. Only your
+application knows whether a given upstream being down means it can still do its
+job, so deciding that is yours:
+
+```go
+healthSrv.SetServingStatus(
+    yourpb.YourService_ServiceDesc.ServiceName,
+    grpc_health_v1.HealthCheckResponse_NOT_SERVING,
+)
+```
+
+The generated `_ServiceDesc.ServiceName` constant is the same name `Register`
+used, so the two cannot drift.
 
 ### Direct Client Usage
 
