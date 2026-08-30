@@ -35,5 +35,11 @@ func (c *Client) register(ctx context.Context) {
 	if err != nil {
 		c.log.ErrorContext(ctx, "Failed to register",
 			"error", err, slog.String("grpcd_address", grpcdAddress))
+
+		return
 	}
+
+	c.log.DebugContext(ctx, "Registered",
+		slog.String("grpcd_address", grpcdAddress),
+		slog.Int("method_count", len(c.methods)))
 }

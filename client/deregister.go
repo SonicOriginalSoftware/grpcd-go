@@ -44,5 +44,12 @@ func (c *Client) deregister(ctx context.Context) {
 	if err != nil {
 		c.log.ErrorContext(ctx, "Failed to deregister",
 			"error", err, slog.String("grpcd_address", grpcdAddress))
+
+		return
 	}
+
+	c.log.InfoContext(ctx, "Deregistered",
+		slog.String("grpcd_address", grpcdAddress),
+		slog.Int("method_count", len(c.methods)),
+	)
 }
