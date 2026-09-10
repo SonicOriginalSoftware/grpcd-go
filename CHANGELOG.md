@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.8.0 - 2026-09-10
+#### Features
+- no explicit deregister or keepalive pings anymore - (4641057) - Nathan Blair
+
+- - -
+
 ## 0.7.1 - 2026-08-30
 #### Bug Fixes
 - logging register and deregister - (359c2fc) - Nathan Blair
