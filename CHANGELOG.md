@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.9.0 - 2026-09-10
+#### Features
+- update grpc-foundation to incorporate sdk log formatting fixes - (51a158b) - Nathan Blair
+
+- - -
+
 ## 0.8.0 - 2026-09-10
 #### Features
 - no explicit deregister or keepalive pings anymore - (4641057) - Nathan Blair
