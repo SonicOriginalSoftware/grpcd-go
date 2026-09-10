@@ -71,42 +71,22 @@ used, so the two cannot drift.
 
 ### Direct Client Usage
 
-For more control, use the client directly:
+`client.New` takes a `grpcd.GRPCDServiceClient` rather than an address, so the
+connection is yours to build and a test can supply a fake. It also takes your
+listener's address: grpcd reads the IP off the connection and cannot see the
+port you are serving on, so the port half comes from there.
 
-```go
-package main
+`Run` opens the registration stream and holds it. The stream is the
+registration — grpcd writes the rows when it opens and removes them when it
+ends — so there is no interval to refresh and nothing to deregister on the way
+out. A broken stream is reopened, paced by the gRPC connection's own backoff.
 
-import (
-    "context"
-    "log/slog"
+Given an empty method list there is nothing to register, so `Run` logs that and
+returns rather than holding a stream that claims otherwise.
 
-    "git.sonicoriginal.software/grpcd-go/client"
-)
-
-func main() {
-    log := slog.Default()
-
-    // Create client with the methods your service implements
-    methods := []string{
-        "yourpackage.YourService.YourMethod",
-        "yourpackage.YourService.AnotherMethod",
-    }
-
-    grpcdClient := client.New(log, "yourservice", methods)
-
-    // Start background registration loop
-    ctx := context.Background()
-    go grpcdClient.Run(ctx)
-
-    // Your service runs...
-
-    // Graceful shutdown deregisters automatically via context cancellation
-}
-```
-
-A registration is a lease that `Run` renews on an interval. Given an empty
-method list there is no lease worth holding, so `Run` logs that and returns
-immediately rather than registering nothing every interval.
+`service/example_test.go` holds the whole sequence, including building the
+connection only when `GRPCD_ADDRESS` is set. Read it there rather than from a
+copy here.
 
 ## Configuration
 
@@ -121,16 +101,16 @@ registration).
 
 ### Method Names
 
-Methods must be fully qualified in the format:
+Methods are gRPC wire format:
 
 ```
-package.service.Method
+/package.Service/Method
 ```
 
 Examples:
 
-- `auth.AuthService.Login`
-- `api.v1.UserService.GetUser`
+- `/auth.AuthService/Login`
+- `/api.v1.UserService/GetUser`
 
 `service.Register` derives these names from what is registered on your server,
 so you do not maintain the list by hand.
