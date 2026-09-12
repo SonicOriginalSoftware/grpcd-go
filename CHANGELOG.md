@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## 0.11.0 - 2026-09-12
+#### Features
+- implement Watch - (a889f18) - Nathan Blair
+
+- - -
+
 ## 0.10.0 - 2026-09-12
 #### Features
 - use resolvers to simplify and consolidate client discovery - (f4ecf41) - Nathan Blair
