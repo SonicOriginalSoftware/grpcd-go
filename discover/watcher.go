@@ -7,7 +7,7 @@ import (
 
 	"google.golang.org/grpc"
 
-	grpcd "git.sonicoriginal.software/grpcd-protos"
+	grpcd "github.com/grpcd/protos"
 )
 
 // watcher holds a Watch stream naming one address for as long as its context

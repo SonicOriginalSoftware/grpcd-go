@@ -1,4 +1,4 @@
-package service_test
+package client_test
 
 import (
 	"context"
@@ -16,12 +16,12 @@ import (
 	foundationclient "git.sonicoriginal.software/grpc-foundation/client"
 	foundationotel "git.sonicoriginal.software/grpc-foundation/otel"
 	foundation "git.sonicoriginal.software/grpc-foundation/server"
+	"git.sonicoriginal.software/grpc-service/diagnostics"
+	"git.sonicoriginal.software/grpc-service/service"
 
-	grpcdclient "git.sonicoriginal.software/grpcd-go/client"
-	"git.sonicoriginal.software/grpcd-go/diagnostics"
-	"git.sonicoriginal.software/grpcd-go/discover"
-	"git.sonicoriginal.software/grpcd-go/service"
-	grpcd "git.sonicoriginal.software/grpcd-protos"
+	grpcdclient "github.com/grpcd/client/client"
+	"github.com/grpcd/client/discover"
+	grpcd "github.com/grpcd/protos"
 )
 
 const cleanupTimeout = 5 * time.Second
@@ -35,10 +35,10 @@ func registerExampleService(s grpc.ServiceRegistrar) {
 	}, struct{}{})
 }
 
-// Example shows how a service wires itself up. The listener and the server are
-// the caller's, as are the goroutines; this package only assembles. It has no
-// Output comment, so it is compiled but never run — its job is to keep this
-// sequence type-checked.
+// Example shows how a service registers with grpcd and reaches an upstream
+// through it. The listener and the server are the caller's, as are the
+// goroutines. It has no Output comment, so it is compiled but never run — its
+// job is to keep this sequence type-checked.
 func Example() {
 	// Registered first so it runs last, after the teardown below has flushed.
 	// Returning rather than calling os.Exit directly is what lets the defers run
@@ -72,9 +72,8 @@ func Example() {
 	// the server and exports what it logged on the way.
 	defer foundation.HandleGracefulShutdown(ctx, log, srv, flush, cleanupTimeout)
 
-	// Checks for the upstream services this one depends on. A grpcd check is
-	// added for you when GRPCD_ADDRESS is set, and "grpcd" is reserved either
-	// way.
+	// Checks for the services this one depends on, keyed by the name
+	// diagnostics reports them under.
 	checks := diagnostics.Checks{}
 
 	// With no grpcd address there is nothing to register with and nothing to
@@ -90,6 +89,10 @@ func Example() {
 		defer conn.Close()
 
 		grpcdClient = grpcd.NewGRPCDServiceClient(conn)
+
+		// The registration and every discovery go through this connection, so
+		// it is the one diagnostics report on.
+		checks[grpcdclient.CheckName] = diagnostics.NewDependencyCheck(conn)
 
 		// One Discovery per process, shared by every upstream. The example
 		// service has none; the method below stands in for a generated
@@ -118,6 +121,8 @@ func Example() {
 
 	healthSrv := health.NewServer()
 
+	// The returned method list is what this server exposes beyond the
+	// infrastructure endpoints, which is what it advertises to grpcd.
 	methodList, err := service.Register(srv, healthSrv, checks, registerExampleService)
 	if err != nil {
 		log.Error("Failed to register services", slog.Any("error", err))
@@ -136,8 +141,8 @@ func Example() {
 	if grpcdClient != nil {
 		registration := grpcdclient.New(log, serverName, addr, methodList, grpcdClient)
 
-		// Register holds the registration stream open. Its ending is what removes the
-		// rows, so there is no deregistration to wait for here.
+		// Register holds the registration stream open. Its ending is what
+		// removes the rows, so there is no deregistration to wait for here.
 		go registration.Register(serveCtx)
 	}
 

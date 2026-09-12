@@ -10,7 +10,7 @@ import (
 
 	"git.sonicoriginal.software/logger"
 
-	grpcd "git.sonicoriginal.software/grpcd-protos"
+	grpcd "github.com/grpcd/protos"
 )
 
 const component = "grpcd-discover"

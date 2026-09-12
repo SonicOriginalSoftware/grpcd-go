@@ -7,7 +7,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/resolver"
 
-	grpcd "git.sonicoriginal.software/grpcd-protos"
+	grpcd "github.com/grpcd/protos"
 )
 
 // loop is the resolver grpc-go holds for one ClientConn. It discovers an

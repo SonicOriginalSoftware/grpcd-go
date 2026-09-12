@@ -7,7 +7,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/resolver"
 
-	grpcdmethods "git.sonicoriginal.software/grpcd-go/methods"
+	"git.sonicoriginal.software/grpc-foundation/methods"
 )
 
 // scheme is what routes a target to this package's resolver.
@@ -33,7 +33,7 @@ type Upstream struct {
 // this resolver; its endpoint is the service name, which grpc-go also uses as
 // the default :authority, so it holds no slash.
 func (u *Upstream) Target() string {
-	return scheme + ":///" + grpcdmethods.ServiceName(u.method)
+	return scheme + ":///" + methods.ServiceName(u.method)
 }
 
 // DialOptions are what the ClientConn needs to be discovered: this resolver,

@@ -13,7 +13,8 @@ import (
 	"google.golang.org/grpc/stats"
 
 	"git.sonicoriginal.software/grpc-testing/mocks/addr"
-	grpcd "git.sonicoriginal.software/grpcd-protos"
+
+	grpcd "github.com/grpcd/protos"
 )
 
 const method = "/pkg.Service/Method"

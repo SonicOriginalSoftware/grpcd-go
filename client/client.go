@@ -5,12 +5,12 @@ import (
 	"log/slog"
 	"net"
 
-	"git.sonicoriginal.software/logger"
-
-	grpcd "git.sonicoriginal.software/grpcd-protos"
-
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
+
+	"git.sonicoriginal.software/logger"
+
+	grpcd "github.com/grpcd/protos"
 )
 
 // Client holds this server's registration with grpcd.
@@ -28,6 +28,9 @@ const (
 	// GRPCDAddressKey is the env variable name
 	// of what address to use for the grpcd connection
 	GRPCDAddressKey = "GRPCD_ADDRESS"
+	// CheckName is the diagnostics name a service reports its grpcd
+	// dependency under, so every service reports it under the same one.
+	CheckName = "grpcd"
 )
 
 // New returns a new grpcd client.

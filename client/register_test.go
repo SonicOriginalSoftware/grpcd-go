@@ -10,7 +10,8 @@ import (
 	"google.golang.org/grpc"
 
 	"git.sonicoriginal.software/grpc-testing/mocks/addr"
-	grpcd "git.sonicoriginal.software/grpcd-protos"
+
+	grpcd "github.com/grpcd/protos"
 )
 
 // recvResult is one answer the fake stream hands back, in order.

@@ -6,9 +6,9 @@ import (
 	"net"
 	"strconv"
 
-	grpcd "git.sonicoriginal.software/grpcd-protos"
-
 	"google.golang.org/grpc"
+
+	grpcd "github.com/grpcd/protos"
 )
 
 // Register holds this server's registration open for as long as ctx lives.

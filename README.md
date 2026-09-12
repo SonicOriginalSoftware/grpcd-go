@@ -1,7 +1,6 @@
-# grpcd-go
+# `grpcd` Client
 
-Go client library for the
-[grpcd](https://github.com/sonic-original-software/grpcd-protos) gRPC method
+Go client library for the [grpcd](https://github.com/grpcd) gRPC method
 discovery system.
 
 ## About
@@ -12,83 +11,47 @@ they implement; clients query grpcd to discover where those methods are
 available.
 
 For system architecture, protocol definitions, and design documentation, see
-[grpcd-protos](https://github.com/sonic-original-software/grpcd-protos).
+[grpcd-protos](https://github.com/grpcd/protos).
 
 ## Installation
 
 ```bash
-go get git.sonicoriginal.software/grpcd-go
+go get github.com/grpcd/client
 ```
 
 ## What's Included
 
 - **`client/`** - Client SDK for method registration
-- **`discover/`** - Resolver that keeps a connection pointed at a discovered upstream
-- **`diagnostics/`** - Diagnostics service reporting on upstream dependencies
-- **`methods/`** - Method-name helpers shared by the packages above
-- **`service/`** - Assembly helpers for registering a service's endpoints
+- **`discover/`** - Resolver that keeps a connection pointed at a discovered
+  upstream
+
+The endpoints a service exposes and the method list it advertises come from
+[grpc-service](https://github.com/sonic-original-software/grpc-service); this
+library takes that list and registers it.
 
 ## Usage
 
-### Service Assembly
+`client/example_test.go` holds the whole sequence as a Go `Example`: assembling
+the server, dialing grpcd only when `GRPCD_ADDRESS` is set, reaching an
+upstream, reporting both as dependencies, and holding the registration. It has
+no `// Output:` comment, so `go test` compiles it and never runs it, which keeps
+it type-checked against the real API. Read it there rather than from a copy
+here.
 
-The `service` package attaches the endpoints every service exposes — health,
-reflection, diagnostics, and info — alongside your own, and reports which
-methods should be advertised to grpcd.
-
-The info service answers with the server's version, read from
-`GRPC_SERVER_VERSION`, so services no longer implement it themselves.
-
-It assembles only. The listener, the server, the background goroutines, and the
-blocking `Serve` call are yours, because those are the pieces that differ
-between production and a test.
-
-`service/example_test.go` holds the whole sequence as a Go `Example`. It has no
-`// Output:` comment, so `go test` compiles it and never runs it, which keeps it
-type-checked against the real API. Read it there rather than from a copy here.
-
-The returned method list excludes the `grpc.`, `info.`, and `diagnostics.`
-services, which are infrastructure rather than something callers discover.
-
-## Health Status
-
-`health.NewServer()` marks the `""` entry SERVING, which answers "is this
-process alive". `Register` adds an entry per service you registered, under its
-fully qualified gRPC name, so a probe asks about `yourpackage.YourService`
-rather than a logical name of your choosing.
-
-Those entries start SERVING and stay there until you change them. Only your
-application knows whether a given upstream being down means it can still do its
-job, so deciding that is yours:
-
-```go
-healthSrv.SetServingStatus(
-    yourpb.YourService_ServiceDesc.ServiceName,
-    grpc_health_v1.HealthCheckResponse_NOT_SERVING,
-)
-```
-
-The generated `_ServiceDesc.ServiceName` constant is the same name `Register`
-used, so the two cannot drift.
-
-### Direct Client Usage
+### Registering
 
 `client.New` takes a `grpcd.GRPCDServiceClient` rather than an address, so the
 connection is yours to build and a test can supply a fake. It also takes your
 listener's address: grpcd reads the IP off the connection and cannot see the
 port you are serving on, so the port half comes from there.
 
-`Run` opens the registration stream and holds it. The stream is the
+`Register` opens the registration stream and holds it. The stream is the
 registration — grpcd writes the rows when it opens and removes them when it
 ends — so there is no interval to refresh and nothing to deregister on the way
 out. A broken stream is reopened, paced by the gRPC connection's own backoff.
 
-Given an empty method list there is nothing to register, so `Run` logs that and
-returns rather than holding a stream that claims otherwise.
-
-`service/example_test.go` holds the whole sequence, including building the
-connection only when `GRPCD_ADDRESS` is set. Read it there rather than from a
-copy here.
+Given an empty method list there is nothing to register, so `Register` logs
+that and returns rather than holding a stream that claims otherwise.
 
 ### Reaching an Upstream
 
@@ -96,41 +59,39 @@ A service that depends on another grpcd-registered service holds one
 `*grpc.ClientConn` to it for the life of the process. The `discover` package
 supplies that connection's resolver: it asks grpcd for the method, probes each
 candidate from the service's own network position, reports the ones it cannot
-reach, and pushes the one it can into the connection. When the transport to
-that replica drops, it discovers again. The application holds a plain
-connection and the generated client built on it never sees an address change.
+reach, and pushes the one it can into the connection. When the transport to that
+replica drops, it discovers again. The application holds a plain connection and
+the generated client built on it never sees an address change.
 
 `discover.New` is built once per process on the same grpcd client the
-registration uses. Each upstream is one `Upstream`, named by one of its
-methods (a replica registers every method of its service, so one stands for
-the whole). Its `Target()` and `DialOptions()` go to `foundationclient.New`
-like any other target and options. grpc-go builds the resolver when the
-connection first leaves idle, so call `Connect()` on it to start discovering
-at startup rather than on the first RPC.
+registration uses. Each upstream is one `Upstream`, named by one of its methods
+(a replica registers every method of its service, so one stands for the whole).
+Its `Target()` and `DialOptions()` go to `foundationclient.New` like any other
+target and options. grpc-go builds the resolver when the connection first leaves
+idle, so call `Connect()` on it to start discovering at startup rather than on
+the first RPC.
 
-The resolver also holds a `Watch` naming the address it took. When a replica
-of the upstream registers later, grpcd tells a share of the holders to move to
-it; the resolver probes the new address, pushes it into the connection, and
-opens a `Watch` naming it. A new replica takes its share of existing
-connections that way, and a move that cannot be reached is a no-op.
+The resolver also holds a `Watch` naming the address it took. When a replica of
+the upstream registers later, grpcd tells a share of the holders to move to it;
+the resolver probes the new address, pushes it into the connection, and opens a
+`Watch` naming it. A new replica takes its share of existing connections that
+way, and a move that cannot be reached is a no-op.
 
-`diagnostics.NewUpstreamCheck` reports such a connection under the replica
-address it is currently on; the connection's own `Target()` is the `grpcd:///`
-URL. While no replica is held, RPCs on the connection fail with `Unavailable`
+While no replica is held, RPCs on the connection fail with `Unavailable`
 rather than waiting.
 
-`service/example_test.go` holds the wiring.
+### Reporting Dependencies
+
+Both connections are dependencies the service's diagnostics should report. The
+grpcd connection goes in under `client.CheckName`, so every service reports it
+under the same name; the upstream goes in through
+`diagnostics.NewUpstreamCheck`, which reports the replica address the
+connection is on rather than its `grpcd:///` target.
 
 ## Configuration
 
-Configure via environment variables:
-
-### Required
-
-- `GRPCD_ADDRESS` - Address of the grpcd service (e.g., `grpcd.example.com:443`)
-
-If `GRPCD_ADDRESS` is not set, the service runs in disconnected mode (no
-registration).
+- `GRPCD_ADDRESS` - Address of the grpcd service (e.g., `grpcd.example.com:443`).
+  When unset, the service neither registers nor discovers, and serves anyway.
 
 ### Method Names
 
@@ -145,5 +106,5 @@ Examples:
 - `/auth.AuthService/Login`
 - `/api.v1.UserService/GetUser`
 
-`service.Register` derives these names from what is registered on your server,
-so you do not maintain the list by hand.
+`service.Register` in grpc-service derives these names from what is registered
+on your server, so you do not maintain the list by hand.

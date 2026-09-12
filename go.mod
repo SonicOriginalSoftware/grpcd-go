@@ -1,19 +1,20 @@
-module git.sonicoriginal.software/grpcd-go
+module github.com/grpcd/client
 
-go 1.26.6
+go 1.27.1
 
 require (
-	git.sonicoriginal.software/grpc-foundation v0.10.4
-	git.sonicoriginal.software/grpc-protos v0.2.0
+	git.sonicoriginal.software/grpc-foundation v0.11.0
+	git.sonicoriginal.software/grpc-service v0.1.0
 	git.sonicoriginal.software/grpc-testing v0.2.0
-	git.sonicoriginal.software/grpcd-protos v0.4.0
 	git.sonicoriginal.software/logger v0.1.0
+	github.com/grpcd/protos v0.5.0
 	go.opentelemetry.io/otel v1.46.0
 	go.opentelemetry.io/otel/trace v1.46.0
 	google.golang.org/grpc v1.83.2
 )
 
 require (
+	git.sonicoriginal.software/grpc-protos v0.2.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
@@ -38,6 +39,6 @@ require (
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260908043556-f8649ddbbfe6 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260908043556-f8649ddbbfe6 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260911204522-f61a6ca850bd // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 )
