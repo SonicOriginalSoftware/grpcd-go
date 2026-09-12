@@ -66,6 +66,41 @@ func TestNewDependencyCheck(t *testing.T) {
 	})
 }
 
+// addressStub answers Address with a fixed replica.
+type addressStub string
+
+func (a addressStub) Address() string { return string(a) }
+
+func TestNewUpstreamCheck(t *testing.T) {
+	t.Run("reports the replica rather than the target", func(t *testing.T) {
+		check := NewUpstreamCheck(newServingDependency("grpcd:///pkg.Service"), addressStub("10.0.0.1:50054"))
+
+		got, err := check(t.Context())
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Address != "10.0.0.1:50054" {
+			t.Errorf("address = %q, want 10.0.0.1:50054", got.Address)
+		}
+		if want := grpc_health_v1.HealthCheckResponse_SERVING.String(); got.Serving != want {
+			t.Errorf("serving = %q, want %q", got.Serving, want)
+		}
+	})
+
+	t.Run("reports no replica when the health check fails", func(t *testing.T) {
+		wantErr := status.Error(codes.Unavailable, "health service unavailable")
+		check := NewUpstreamCheck(newFailingDependency("grpcd:///pkg.Service", wantErr), addressStub(""))
+
+		got, err := check(t.Context())
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("error = %v, want %v", err, wantErr)
+		}
+		if got.Address != "" {
+			t.Errorf("address = %q, want empty", got.Address)
+		}
+	})
+}
+
 func TestNewTargetCheck(t *testing.T) {
 	t.Run("returns no dependency when the target cannot be parsed", func(t *testing.T) {
 		// An unknown scheme is not enough: grpc falls back to its default one

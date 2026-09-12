@@ -37,6 +37,25 @@ func NewDependencyCheck(conn Dependency) Check {
 	}
 }
 
+// Addressed is what a check needs of something that knows which replica a
+// connection is on right now.
+type Addressed interface {
+	Address() string
+}
+
+// NewUpstreamCheck wires up checking a discovered connection. It reports what
+// NewDependencyCheck reports, with the replica address from upstream in place
+// of conn.Target(), which for a discovered connection is the grpcd:/// target
+// rather than anywhere reachable.
+func NewUpstreamCheck(conn Dependency, upstream Addressed) Check {
+	return func(ctx context.Context) (*diagpb.ServiceDependency, error) {
+		dependency, err := grpcCheck(ctx, conn)
+		dependency.Address = upstream.Address()
+
+		return dependency, err
+	}
+}
+
 // NewTargetCheck creating a new grpc connection before wiring up its checking
 func NewTargetCheck(address string, opts ...grpc.DialOption) Check {
 	return func(ctx context.Context) (*diagpb.ServiceDependency, error) {

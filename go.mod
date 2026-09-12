@@ -3,7 +3,7 @@ module git.sonicoriginal.software/grpcd-go
 go 1.26.6
 
 require (
-	git.sonicoriginal.software/grpc-foundation v0.10.3
+	git.sonicoriginal.software/grpc-foundation v0.10.4
 	git.sonicoriginal.software/grpc-protos v0.2.0
 	git.sonicoriginal.software/grpc-testing v0.2.0
 	git.sonicoriginal.software/grpcd-protos v0.3.0

@@ -19,6 +19,7 @@ import (
 
 	grpcdclient "git.sonicoriginal.software/grpcd-go/client"
 	"git.sonicoriginal.software/grpcd-go/diagnostics"
+	"git.sonicoriginal.software/grpcd-go/discover"
 	"git.sonicoriginal.software/grpcd-go/service"
 	grpcd "git.sonicoriginal.software/grpcd-protos"
 )
@@ -76,6 +77,45 @@ func Example() {
 	// way.
 	checks := diagnostics.Checks{}
 
+	// With no grpcd address there is nothing to register with and nothing to
+	// discover through, and the server serves anyway.
+	var grpcdClient grpcd.GRPCDServiceClient
+
+	if grpcdAddress := os.Getenv(grpcdclient.GRPCDAddressKey); grpcdAddress != "" {
+		conn, err := foundationclient.New(grpcdAddress, nil, nil)
+		if err != nil {
+			log.Error("Failed to connect to grpcd", slog.Any("error", err))
+			return
+		}
+		defer conn.Close()
+
+		grpcdClient = grpcd.NewGRPCDServiceClient(conn)
+
+		// One Discovery per process, shared by every upstream. The example
+		// service has none; the method below stands in for a generated
+		// _FullMethodName constant of a real one.
+		discovery := discover.New(serveCtx, log, grpcdClient, discover.NewProbe())
+
+		upstream := discovery.Upstream("/example.UpstreamService/Get")
+
+		// A plain connection. The resolver carried in by DialOptions pushes
+		// each address it discovers into it, so the generated client built on
+		// it never sees an address change.
+		upstreamConn, err := foundationclient.New(upstream.Target(), nil, nil, upstream.DialOptions()...)
+		if err != nil {
+			log.Error("Failed to build the upstream connection", slog.Any("error", err))
+			return
+		}
+		defer upstreamConn.Close()
+
+		// grpc-go builds the resolver when the connection first leaves idle.
+		// Discovering from startup rather than from the first RPC is worth an
+		// explicit nudge.
+		upstreamConn.Connect()
+
+		checks["upstream"] = diagnostics.NewUpstreamCheck(upstreamConn, upstream)
+	}
+
 	healthSrv := health.NewServer()
 
 	methodList, err := service.Register(srv, healthSrv, checks, registerExampleService)
@@ -93,22 +133,12 @@ func Example() {
 
 	log = log.With(slog.String("address", addr.String()))
 
-	// With no grpcd address there is nothing to register with, and the server
-	// serves anyway.
-	if grpcdAddress := os.Getenv(grpcdclient.GRPCDAddressKey); grpcdAddress != "" {
-		conn, err := foundationclient.New(grpcdAddress, nil, nil)
-		if err != nil {
-			log.Error("Failed to connect to grpcd", slog.Any("error", err))
-			return
-		}
-		defer conn.Close()
-
-		sc := grpcd.NewGRPCDServiceClient(conn)
-		grpcdClient := grpcdclient.New(log, serverName, addr, methodList, sc)
+	if grpcdClient != nil {
+		registration := grpcdclient.New(log, serverName, addr, methodList, grpcdClient)
 
 		// Register holds the registration stream open. Its ending is what removes the
 		// rows, so there is no deregistration to wait for here.
-		go grpcdClient.Register(serveCtx)
+		go registration.Register(serveCtx)
 	}
 
 	// Serve blocks, and a deferred teardown cannot run while it does, so it goes

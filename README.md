@@ -22,8 +22,10 @@ go get git.sonicoriginal.software/grpcd-go
 
 ## What's Included
 
-- **`client/`** - Client SDK for method registration and discovery
+- **`client/`** - Client SDK for method registration
+- **`discover/`** - Resolver that keeps a connection pointed at a discovered upstream
 - **`diagnostics/`** - Diagnostics service reporting on upstream dependencies
+- **`methods/`** - Method-name helpers shared by the packages above
 - **`service/`** - Assembly helpers for registering a service's endpoints
 
 ## Usage
@@ -87,6 +89,31 @@ returns rather than holding a stream that claims otherwise.
 `service/example_test.go` holds the whole sequence, including building the
 connection only when `GRPCD_ADDRESS` is set. Read it there rather than from a
 copy here.
+
+### Reaching an Upstream
+
+A service that depends on another grpcd-registered service holds one
+`*grpc.ClientConn` to it for the life of the process. The `discover` package
+supplies that connection's resolver: it asks grpcd for the method, probes each
+candidate from the service's own network position, reports the ones it cannot
+reach, and pushes the one it can into the connection. When the transport to
+that replica drops, it discovers again. The application holds a plain
+connection and the generated client built on it never sees an address change.
+
+`discover.New` is built once per process on the same grpcd client the
+registration uses. Each upstream is one `Upstream`, named by one of its
+methods (a replica registers every method of its service, so one stands for
+the whole). Its `Target()` and `DialOptions()` go to `foundationclient.New`
+like any other target and options. grpc-go builds the resolver when the
+connection first leaves idle, so call `Connect()` on it to start discovering
+at startup rather than on the first RPC.
+
+`diagnostics.NewUpstreamCheck` reports such a connection under the replica
+address it is currently on; the connection's own `Target()` is the `grpcd:///`
+URL. While no replica is held, RPCs on the connection fail with `Unavailable`
+rather than waiting.
+
+`service/example_test.go` holds the wiring.
 
 ## Configuration
 

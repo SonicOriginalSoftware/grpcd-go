@@ -17,6 +17,7 @@ import (
 
 	grpcdclient "git.sonicoriginal.software/grpcd-go/client"
 	"git.sonicoriginal.software/grpcd-go/diagnostics"
+	grpcdmethods "git.sonicoriginal.software/grpcd-go/methods"
 )
 
 // grpcdCheckName is the diagnostics name reserved for the grpcd dependency
@@ -72,7 +73,7 @@ func Register(
 
 	methodNames := methods.Extract(srv, methods.NewPatternFilter(nil, infrastructurePrefixes))
 
-	for _, serviceName := range serviceNames(methodNames) {
+	for _, serviceName := range grpcdmethods.ServiceNames(methodNames) {
 		healthSrv.SetServingStatus(serviceName, grpc_health_v1.HealthCheckResponse_SERVING)
 	}
 
