@@ -6,7 +6,7 @@ require (
 	git.sonicoriginal.software/grpc-foundation v0.10.4
 	git.sonicoriginal.software/grpc-protos v0.2.0
 	git.sonicoriginal.software/grpc-testing v0.2.0
-	git.sonicoriginal.software/grpcd-protos v0.3.0
+	git.sonicoriginal.software/grpcd-protos v0.4.0
 	git.sonicoriginal.software/logger v0.1.0
 	go.opentelemetry.io/otel v1.46.0
 	go.opentelemetry.io/otel/trace v1.46.0

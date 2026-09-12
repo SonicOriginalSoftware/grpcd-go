@@ -31,6 +31,9 @@ type discoverStream struct {
 	askErr    error
 	reportErr error
 
+	// service records the close in the service's event order, when set.
+	service *serviceStub
+
 	mu     sync.Mutex
 	offers int
 	sent   []*grpcd.DiscoverRequest
@@ -74,9 +77,12 @@ func (s *discoverStream) Send(request *grpcd.DiscoverRequest) error {
 
 func (s *discoverStream) CloseSend() error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	s.closed = true
+	s.mu.Unlock()
+
+	if s.service != nil {
+		s.service.record("close")
+	}
 
 	return nil
 }
@@ -104,6 +110,39 @@ func (s *discoverStream) wasClosed() bool {
 	return s.closed
 }
 
+// watchStream stands in for one Watch stream. The test feeds addresses on
+// moves; Recv answers with them until the stream's context ends or recvErr is
+// set, which ends the stream.
+type watchStream struct {
+	grpc.ClientStream
+
+	ctx     context.Context
+	moves   chan string
+	recvErr error
+}
+
+func newWatchStream() *watchStream {
+	return &watchStream{moves: make(chan string)}
+}
+
+func (s *watchStream) Recv() (*grpcd.WatchResponse, error) {
+	if s.recvErr != nil {
+		return nil, s.recvErr
+	}
+
+	select {
+	case address := <-s.moves:
+		return &grpcd.WatchResponse{Address: address}, nil
+	case <-s.ctx.Done():
+		return nil, s.ctx.Err()
+	}
+}
+
+// ended reports whether the loop has let go of this stream.
+func (s *watchStream) ended() <-chan struct{} {
+	return s.ctx.Done()
+}
+
 // serviceStub hands out the prepared streams in order, repeating the last one,
 // and counts how many times it was asked. The embedded interface supplies
 // Register, which discovery never calls.
@@ -112,6 +151,13 @@ type serviceStub struct {
 
 	streams []*discoverStream
 	err     error
+
+	watches  []*watchStream
+	watchErr error
+
+	// watchCalls receives one value per Watch call, so a test can wait for
+	// the nth. Buffered; a test that sets it reads it.
+	watchCalls chan struct{}
 
 	// onCall runs on every Discover with the call's ordinal, so a test can end
 	// the loop once it has seen what it needs.
@@ -123,8 +169,11 @@ type serviceStub struct {
 	blocks   bool
 	released chan struct{}
 
-	mu    sync.Mutex
-	calls int
+	mu      sync.Mutex
+	calls   int
+	watched []*grpcd.WatchRequest
+	opened  []*watchStream
+	events  []string
 }
 
 func (s *serviceStub) Discover(
@@ -150,7 +199,80 @@ func (s *serviceStub) Discover(
 		return nil, s.err
 	}
 
-	return s.streams[min(n, len(s.streams))-1], nil
+	stream := s.streams[min(n, len(s.streams))-1]
+	stream.service = s
+
+	return stream, nil
+}
+
+func (s *serviceStub) Watch(
+	ctx context.Context, in *grpcd.WatchRequest, _ ...grpc.CallOption,
+) (grpc.ServerStreamingClient[grpcd.WatchResponse], error) {
+	s.mu.Lock()
+	s.watched = append(s.watched, in)
+	n := len(s.watched)
+	s.mu.Unlock()
+
+	s.record("watch:" + in.GetAddress())
+
+	if s.watchCalls != nil {
+		select {
+		case s.watchCalls <- struct{}{}:
+		default:
+		}
+	}
+
+	s.mu.Lock()
+	watchErr := s.watchErr
+	s.mu.Unlock()
+
+	if watchErr != nil {
+		return nil, watchErr
+	}
+
+	// A fresh stream value per call, sharing the prepared feed, so each call
+	// carries its own context. With nothing prepared, a stream that only ever
+	// waits.
+	template := newWatchStream()
+	if len(s.watches) > 0 {
+		template = s.watches[min(n, len(s.watches))-1]
+	}
+
+	stream := &watchStream{ctx: ctx, moves: template.moves, recvErr: template.recvErr}
+
+	s.mu.Lock()
+	s.opened = append(s.opened, stream)
+	s.mu.Unlock()
+
+	return stream, nil
+}
+
+// setWatchErr makes every Watch from now on fail with err.
+func (s *serviceStub) setWatchErr(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.watchErr = err
+}
+
+// record appends an event in the order it happened.
+func (s *serviceStub) record(event string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.events = append(s.events, event)
+}
+
+// openedWatch answers with the nth Watch stream handed out, or nil.
+func (s *serviceStub) openedWatch(n int) *watchStream {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if n >= len(s.opened) {
+		return nil
+	}
+
+	return s.opened[n]
 }
 
 func (s *serviceStub) discovers() int {
@@ -158,6 +280,27 @@ func (s *serviceStub) discovers() int {
 	defer s.mu.Unlock()
 
 	return s.calls
+}
+
+// watchedAddresses answers with the address named by each Watch, in order.
+func (s *serviceStub) watchedAddresses() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	addresses := []string{}
+
+	for _, request := range s.watched {
+		addresses = append(addresses, request.GetAddress())
+	}
+
+	return addresses
+}
+
+func (s *serviceStub) eventLog() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return append([]string(nil), s.events...)
 }
 
 // ccStub records the states the loop pushes, in order.
@@ -247,10 +390,17 @@ func running(ctx context.Context, u *Upstream, cc resolver.ClientConn) <-chan st
 	return done
 }
 
-// drop tells u's sensor the transport to address opened and then closed.
-func drop(ctx context.Context, u *Upstream, address string) {
+// began tells u's sensor a transport to address opened, the way grpc-go
+// does: tag the context, then hand the event over on it.
+func began(ctx context.Context, u *Upstream, address string) context.Context {
 	ctx = u.sensor.TagConn(ctx, &stats.ConnTagInfo{RemoteAddr: addr.New(address)})
 	u.sensor.HandleConn(ctx, &stats.ConnBegin{Client: true})
+
+	return ctx
+}
+
+// ended tells u's sensor the transport tagged on ctx closed.
+func ended(ctx context.Context, u *Upstream) {
 	u.sensor.HandleConn(ctx, &stats.ConnEnd{Client: true})
 }
 

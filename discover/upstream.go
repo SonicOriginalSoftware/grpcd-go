@@ -18,8 +18,10 @@ const scheme = "grpcd"
 // It is the resolver builder for its own ClientConn: DialOptions carries it
 // into grpc.NewClient, grpc-go calls Build when the connection first leaves
 // idle, and the loop that starts there pushes each address it discovers into
-// the connection. The caller holds a plain *grpc.ClientConn and never sees an
-// address change.
+// the connection. The loop also holds a Watch on that address, so when a
+// replica registers later and grpcd says to move, it probes the new address
+// and pushes that instead. The caller holds a plain *grpc.ClientConn and
+// never sees an address change.
 type Upstream struct {
 	discovery *Discovery
 	method    string

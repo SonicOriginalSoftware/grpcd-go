@@ -11,8 +11,8 @@ import (
 )
 
 // loop is the resolver grpc-go holds for one ClientConn. It discovers an
-// address, pushes it, waits for the transport to it to drop, and discovers
-// again, for as long as the connection exists.
+// address, pushes it, holds it until the transport to it drops or grpcd says
+// to move, and discovers again, for as long as the connection exists.
 type loop struct {
 	upstream *Upstream
 	cc       resolver.ClientConn
@@ -38,50 +38,60 @@ func (l *loop) run(ctx context.Context) {
 		// saying it will not retry; there is nothing to retry, so it is ignored.
 		_ = l.cc.UpdateState(resolver.State{})
 
-		address, found := l.discover(ctx)
+		address, w, found := l.discover(ctx)
 		if !found {
 			return
 		}
 
-		_ = l.cc.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: address}}})
+		l.push(address)
 
-		l.await(ctx, address)
+		w = l.hold(ctx, address, w)
+
+		w.stop()
 	}
 }
 
-// discover asks until a candidate probes reachable. It answers false only
-// when ctx ends. A stream that ends without an answer is reopened; the wait
-// for grpcd itself is the connection's own backoff, reached through
-// WaitForReady.
-func (l *loop) discover(ctx context.Context) (string, bool) {
+// push gives the connection one address.
+func (l *loop) push(address string) {
+	_ = l.cc.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: address}}})
+}
+
+// discover asks until a candidate probes reachable, answering with it and the
+// watcher holding a Watch on it. It answers false only when ctx ends. A stream
+// that ends without an answer is reopened; the wait for grpcd itself is the
+// connection's own backoff, reached through WaitForReady.
+func (l *loop) discover(ctx context.Context) (string, *watcher, bool) {
 	for ctx.Err() == nil {
-		if address, found := l.ask(ctx); found {
-			return address, true
+		if address, w, found := l.ask(ctx); found {
+			return address, w, true
 		}
 	}
 
-	return "", false
+	return "", nil, false
 }
 
 // ask works one Discover stream: it takes the first candidate that probes
 // reachable, reports each that does not, and answers false when the stream
-// ends first. Closing the stream is how grpcd is told the last candidate
-// worked, and the stream's context is cancelled on the way out so it ends
-// whether or not that close is delivered.
-func (l *loop) ask(ctx context.Context) (string, bool) {
+// ends first.
+//
+// A Watch on the taken address is open before the Discover stream is closed,
+// so no registration falls between the two. Closing the stream is how grpcd
+// is told the candidate worked, and the stream's context is cancelled on the
+// way out so it ends whether or not that close is delivered.
+func (l *loop) ask(ctx context.Context) (string, *watcher, bool) {
 	ctx, span := l.upstream.discovery.tracer.Start(ctx, "discover")
 	defer span.End()
 
-	ctx, cancel := context.WithCancel(ctx)
+	askCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	log := l.upstream.log
 
-	stream, err := l.upstream.discovery.service.Discover(ctx, grpc.WaitForReady(true))
+	stream, err := l.upstream.discovery.service.Discover(askCtx, grpc.WaitForReady(true))
 	if err != nil {
 		log.ErrorContext(ctx, "Failed to open discovery", slog.Any("error", err))
 
-		return "", false
+		return "", nil, false
 	}
 
 	request := &grpcd.DiscoverRequest{
@@ -91,7 +101,7 @@ func (l *loop) ask(ctx context.Context) (string, bool) {
 	if err = stream.Send(request); err != nil {
 		log.ErrorContext(ctx, "Failed to ask for the method", slog.Any("error", err))
 
-		return "", false
+		return "", nil, false
 	}
 
 	for {
@@ -99,53 +109,122 @@ func (l *loop) ask(ctx context.Context) (string, bool) {
 		if err != nil {
 			log.ErrorContext(ctx, "Discovery ended without an address", slog.Any("error", err))
 
-			return "", false
+			return "", nil, false
 		}
 
 		address := response.GetAddress()
 
-		if err = l.upstream.discovery.probe(ctx, address); err == nil {
-			// Delivery of the close is not waited on: the address is held
-			// either way, and cancel above ends the stream regardless.
-			_ = stream.CloseSend()
+		if err = l.upstream.discovery.probe(ctx, address); err != nil {
+			log.InfoContext(ctx, "Candidate unreachable, reporting it dead",
+				slog.String("address", address), slog.Any("error", err))
 
-			log.InfoContext(ctx, "Upstream discovered", slog.String("address", address))
+			dead := &grpcd.DiscoverRequest{
+				Step: &grpcd.DiscoverRequest_DeadAddress{DeadAddress: address},
+			}
 
-			return address, true
+			if err = stream.Send(dead); err != nil {
+				log.ErrorContext(ctx, "Failed to report the candidate dead", slog.Any("error", err))
+
+				return "", nil, false
+			}
+
+			continue
 		}
 
-		log.InfoContext(ctx, "Candidate unreachable, reporting it dead",
-			slog.String("address", address), slog.Any("error", err))
+		// The watcher lives under the loop's context, not this ask's, so it
+		// outlives the stream that found the address and stops with the loop.
+		w := l.watch(ctx, address)
 
-		dead := &grpcd.DiscoverRequest{
-			Step: &grpcd.DiscoverRequest_DeadAddress{DeadAddress: address},
+		if !l.opened(ctx, w) {
+			w.stop()
+
+			return "", nil, false
 		}
 
-		if err = stream.Send(dead); err != nil {
-			log.ErrorContext(ctx, "Failed to report the candidate dead", slog.Any("error", err))
+		// Delivery of the close is not waited on: the address is held either
+		// way, and cancel above ends the stream regardless.
+		_ = stream.CloseSend()
 
-			return "", false
+		log.InfoContext(ctx, "Upstream discovered", slog.String("address", address))
+
+		return address, w, true
+	}
+}
+
+// opened waits for w's first Watch to be open, answering false if ctx ends
+// first.
+func (*loop) opened(ctx context.Context, w *watcher) bool {
+	select {
+	case <-w.opened:
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
+
+// hold keeps address until the transport to it drops or ctx ends, moving to
+// whatever grpcd says to move to along the way. It answers with the watcher
+// on whatever address it ends holding, for the caller to stop.
+func (l *loop) hold(ctx context.Context, address string, w *watcher) *watcher {
+	log := l.upstream.log
+
+	for {
+		select {
+		case <-ctx.Done():
+			return w
+
+		case <-l.upstream.sensor.changed:
+			if !l.dropped(address) {
+				continue
+			}
+
+			log.InfoContext(ctx, "Upstream connection dropped", slog.String("address", address))
+
+			return w
+
+		case next, open := <-w.moves:
+			if !open {
+				// The watcher stops only with its context, which is the loop's.
+				return w
+			}
+
+			if err := l.upstream.discovery.probe(ctx, next); err != nil {
+				log.InfoContext(ctx, "Told to move to an unreachable address, staying",
+					slog.String("address", next), slog.Any("error", err))
+
+				continue
+			}
+
+			// The new Watch is open before the old one is closed, so no
+			// registration falls between them.
+			nw := l.watch(ctx, next)
+
+			if !l.opened(ctx, nw) {
+				nw.stop()
+
+				return w
+			}
+
+			l.push(next)
+			w.stop()
+
+			log.InfoContext(ctx, "Moved", slog.String("from", address), slog.String("to", next))
+
+			address, w = next, nw
 		}
 	}
 }
 
-// await blocks until the transport to address drops or ctx ends. A drop of
-// some other address is a transport grpc-go closed because the address it
-// was for had been replaced, which is not a loss.
-func (l *loop) await(ctx context.Context, address string) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case dropped := <-l.upstream.sensor.dropped:
-			if dropped != address {
-				continue
-			}
+// dropped judges the sensor's view against the address the loop pushed. A
+// live transport to it means nothing is wrong; a transport it once had and
+// no longer has means it dropped; anything else means it has not connected
+// yet, which includes an older transport ending on its own time.
+func (l *loop) dropped(address string) bool {
+	state := l.upstream.sensor.State()
 
-			l.upstream.log.InfoContext(ctx, "Upstream connection dropped",
-				slog.String("address", address))
-
-			return
-		}
+	if state.current == address {
+		return false
 	}
+
+	return state.lastBegan == address
 }

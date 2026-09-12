@@ -108,6 +108,12 @@ like any other target and options. grpc-go builds the resolver when the
 connection first leaves idle, so call `Connect()` on it to start discovering
 at startup rather than on the first RPC.
 
+The resolver also holds a `Watch` naming the address it took. When a replica
+of the upstream registers later, grpcd tells a share of the holders to move to
+it; the resolver probes the new address, pushes it into the connection, and
+opens a `Watch` naming it. A new replica takes its share of existing
+connections that way, and a move that cannot be reached is a no-op.
+
 `diagnostics.NewUpstreamCheck` reports such a connection under the replica
 address it is currently on; the connection's own `Target()` is the `grpcd:///`
 URL. While no replica is held, RPCs on the connection fail with `Unavailable`
